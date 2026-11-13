@@ -1,0 +1,53 @@
+name: Build, Test und Deploy auf Docker Hub
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/refcard-02
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node 22 einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Tests
+        run: CI=true npm test
+
+  docker:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Image bauen
+        run: docker build -t $IMAGE:latest -t $IMAGE:${{ github.run_number }} .
+
+      - name: Container testen
+        run: |
+          docker run -d --name refcard02 -p 8080:80 $IMAGE:latest
+          sleep 3
+          curl -sf http://localhost:8080/ | grep "<div id=\"root\">"
+          docker rm -f refcard02
+
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push auf Docker Hub
+        run: |
+          docker push $IMAGE:latest
+          docker push $IMAGE:${{ github.run_number }}

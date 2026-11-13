@@ -1,0 +1,31 @@
+name: Deploy auf GitHub Container Registry
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  ghcr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image bauen und pushen
+        run: |
+          IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/refcard-02
+          docker build -t $IMAGE:latest -t $IMAGE:${{ github.run_number }} \
+            --label org.opencontainers.image.source=https://github.com/${{ github.repository }} .
+          docker push $IMAGE:latest
+          docker push $IMAGE:${{ github.run_number }}
